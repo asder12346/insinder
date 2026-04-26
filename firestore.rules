@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} { allow read, write: if false; }
+
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() { return isSignedIn() && (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || request.auth.token.email == 'samuelabedecornelius@gmail.com'); }
+
+    function isValidPost(data) {
+      return data.keys().hasAll(['title', 'content', 'imageUrl', 'authorId', 'createdAt', 'updatedAt', 'status']) &&
+             data.keys().size() == 7 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.content is string && data.content.size() > 0 && data.content.size() <= 100000 &&
+             data.imageUrl is string && data.imageUrl.size() <= 2000 &&
+             data.authorId is string && data.authorId == request.auth.uid &&
+             data.status in ['draft', 'published'];
+    }
+
+    match /posts/{postId} {
+      allow read: if resource.data.status == 'published' || resource.data.authorId == request.auth.uid || isAdmin();
+      allow list: if resource.data.status == 'published' || resource.data.authorId == request.auth.uid;
+      
+      allow create: if isAdmin() && isValidId(postId) && isValidPost(incoming()) &&
+                    incoming().createdAt == request.time &&
+                    incoming().updatedAt == request.time;
+      
+      allow update: if isAdmin() && isValidId(postId) && isValidPost(incoming()) &&
+                    incoming().authorId == existing().authorId &&
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().updatedAt == request.time &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['title', 'content', 'imageUrl', 'updatedAt', 'status']);
+      
+      allow delete: if isAdmin() && isValidId(postId);
+
+      function isValidComment(data, parentPostId) {
+        return data.keys().hasAll(['postId', 'content', 'authorId', 'authorName', 'createdAt']) &&
+               data.keys().size() == 5 &&
+               data.postId is string && data.postId == parentPostId &&
+               data.content is string && data.content.size() > 0 && data.content.size() <= 5000 &&
+               data.authorId is string && data.authorId == request.auth.uid &&
+               data.authorName is string && data.authorName.size() <= 100;
+      }
+
+      match /comments/{commentId} {
+        allow read, list: if true;
+        
+        allow create: if isSignedIn() && request.auth.token.email_verified == true && 
+                      isValidId(postId) && isValidId(commentId) &&
+                      isValidComment(incoming(), postId) &&
+                      incoming().createdAt == request.time &&
+                      exists(/databases/$(database)/documents/posts/$(postId)) &&
+                      get(/databases/$(database)/documents/posts/$(postId)).data.status == 'published';
+
+        allow delete: if isSignedIn() && isValidId(postId) && isValidId(commentId) &&
+                      (existing().authorId == request.auth.uid || isAdmin());
+      }
+    }
+
+    match /admins/{userId} {
+      allow read: if request.auth.uid == userId;
+    }
+  }
+}

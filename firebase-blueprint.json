@@ -1,0 +1,55 @@
+{
+  "entities": {
+    "Post": {
+      "title": "Post",
+      "description": "A blog post.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "authorId": { "type": "string" },
+        "createdAt": { "type": "string", "description": "Timestamp" },
+        "updatedAt": { "type": "string", "description": "Timestamp" },
+        "status": { "type": "string", "enum": ["draft", "published"] }
+      },
+      "required": ["title", "content", "imageUrl", "authorId", "createdAt", "updatedAt", "status"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "A comment on a blog post.",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string" },
+        "content": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "createdAt": { "type": "string", "description": "Timestamp" }
+      },
+      "required": ["postId", "content", "authorId", "authorName", "createdAt"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "An admin user.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" }
+      },
+      "required": ["email"]
+    }
+  },
+  "firestore": {
+    "/posts/{postId}": {
+      "schema": { "$ref": "#/entities/Post" },
+      "description": "All blog posts."
+    },
+    "/posts/{postId}/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/Comment" },
+      "description": "Comments belonging to a specific post."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/Admin" },
+      "description": "Admin users."
+    }
+  }
+}
