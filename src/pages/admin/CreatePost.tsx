@@ -1,6 +1,7 @@
-import { useState, FormEvent } from 'react';
-import { collection, doc, setDoc } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { useState, FormEvent, useRef, ChangeEvent } from 'react';
+import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../../firebase';
 import { handleFirestoreError, OperationType } from '../../utils/firebaseErrorHandler';
 import { useNavigate, Navigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -13,9 +14,29 @@ export default function AdminCreatePost() {
   const [imageUrl, setImageUrl] = useState('');
   const [status, setStatus] = useState<'draft' | 'published'>('draft');
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (authLoading) return <div className="min-h-screen bg-[#F9F8F6]" />;
   if (!user || !isAdmin) return <Navigate to="/" />;
+
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const storageRef = ref(storage, `blog_images/${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+      setImageUrl(url);
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert('Failed to upload image. Please check your Firebase Storage security rules or connection.');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
@@ -27,15 +48,14 @@ export default function AdminCreatePost() {
     setSaving(true);
     try {
       const newPostRef = doc(collection(db, 'posts'));
-      const now = new Date().toISOString();
       const payload = {
         title: title.trim(),
         content: content.trim(),
         imageUrl: imageUrl.trim(),
         authorId: user.uid,
         status,
-        createdAt: now,
-        updatedAt: now
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       };
       
       await setDoc(newPostRef, payload);
@@ -84,16 +104,35 @@ export default function AdminCreatePost() {
         <section className="lg:w-[40%] bg-white flex flex-col overflow-y-auto w-full">
           <div className="p-8 border-b border-[#1A1A1A]">
             <div className="flex justify-between items-center mb-6 uppercase text-[10px] font-sans tracking-widest font-bold">
-              <span>Feature Image URL</span>
+              <span>Feature Image</span>
+              {uploading && <span className="opacity-50">Uploading...</span>}
             </div>
+            
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              ref={fileInputRef}
+              className="hidden"
+            />
+            
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full font-sans text-xs p-4 border border-[#1A1A1A] focus:outline-none mb-6 bg-[#F9F8F6] text-left opacity-70 hover:opacity-100 transition-opacity"
+              disabled={uploading}
+            >
+              {imageUrl ? 'Change Image...' : 'Select from device...'}
+            </button>
+            
             <input
               type="url"
               value={imageUrl}
               onChange={(e) => setImageUrl(e.target.value)}
               className="w-full font-sans text-xs p-4 border border-[#1A1A1A] focus:outline-none mb-6 placeholder-gray-300 bg-[#F9F8F6]"
-              placeholder="https://images.unsplash.com/..."
-              required
+              placeholder="Or paste URL: https://..."
             />
+            
             {imageUrl && (
               <div className="aspect-video bg-gray-100 border border-dashed border-[#1A1A1A] flex items-center justify-center overflow-hidden relative">
                 <div className="absolute inset-0 bg-[#00000005] mix-blend-multiply"></div>

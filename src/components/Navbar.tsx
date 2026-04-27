@@ -8,7 +8,7 @@ export default function Navbar() {
     <nav className="h-20 border-b border-[#1A1A1A] flex items-center justify-between px-6 sm:px-10 shrink-0 bg-[#F9F8F6]">
       <div className="flex items-baseline space-x-4">
         <Link to="/" className="text-2xl font-bold tracking-tight uppercase font-serif text-[#1A1A1A]">
-          Insights
+          iLiyaIsaac
         </Link>
         <span className="hidden sm:inline text-xs font-sans uppercase tracking-widest text-[#1A1A1A] border-l border-gray-300 pl-4 opacity-50">
           Editorial

@@ -77,7 +77,7 @@ export default function Home() {
                 <div className="flex items-center gap-x-4 mb-4 font-sans text-[10px] uppercase tracking-widest font-bold border-b border-gray-200 pb-2 w-full">
                   <span className="flex items-center gap-1 opacity-60">
                     <Calendar size={14} />
-                    {post.createdAt ? format(new Date(post.createdAt), 'MMM d, yyyy') : 'Unknown Date'}
+                    {post.createdAt ? format(post.createdAt && (post.createdAt as any).toDate ? (post.createdAt as any).toDate() : new Date(post.createdAt), 'MMM d, yyyy') : 'Unknown Date'}
                   </span>
                 </div>
                 <div className="group relative w-full">

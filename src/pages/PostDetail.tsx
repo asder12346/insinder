@@ -1,11 +1,11 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { doc, getDoc, collection, query, where, getDocs, orderBy, addDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { handleFirestoreError, OperationType } from '../utils/firebaseErrorHandler';
 import { useAuth } from '../contexts/AuthContext';
 import { format } from 'date-fns';
-import { Calendar, ArrowLeft } from 'lucide-react';
+import { Calendar, ArrowLeft, Twitter, Facebook, Linkedin, Link2 } from 'lucide-react';
 
 interface Post {
   id: string;
@@ -75,11 +75,15 @@ export default function PostDetail() {
         content: newComment.trim(),
         authorId: user.uid,
         authorName: user.displayName || 'Anonymous',
-        createdAt: new Date().toISOString()
+        createdAt: serverTimestamp()
       };
       
       const docRef = await addDoc(collection(db, `posts/${id}/comments`), payload);
-      setComments([...comments, { id: docRef.id, ...payload }]);
+      setComments([...comments, { 
+        id: docRef.id, 
+        ...payload, 
+        createdAt: { toDate: () => new Date() } // Simulate Firestore Timestamp for local display
+      } as any]);
       setNewComment('');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `posts/${id}/comments`);
@@ -95,6 +99,15 @@ export default function PostDetail() {
       </div>
     );
   }
+
+  const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
+  const encodedUrl = encodeURIComponent(shareUrl);
+  const encodedTitle = encodeURIComponent(post?.title || 'Check out this post');
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(shareUrl);
+    alert('Link copied to clipboard!');
+  };
 
   if (!post) {
     return (
@@ -134,6 +147,47 @@ export default function PostDetail() {
 
       <div className="mx-auto font-sans text-lg text-gray-700 leading-relaxed max-w-3xl mb-16 whitespace-pre-wrap first-letter:text-7xl first-letter:font-serif first-letter:mr-3 first-letter:float-left">
         {post.content}
+      </div>
+
+      {/* Share Section */}
+      <div className="max-w-3xl mx-auto mb-16 py-6 border-t border-b border-[#1A1A1A] flex flex-col sm:flex-row items-center justify-between gap-4">
+        <span className="font-sans text-[10px] uppercase tracking-widest font-bold text-[#1A1A1A]">Share this article</span>
+        <div className="flex items-center gap-4">
+          <a
+            href={`https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-3 border border-[#1A1A1A] hover:bg-black hover:text-white transition-colors flex items-center justify-center opacity-70 hover:opacity-100"
+            aria-label="Share on Twitter"
+          >
+            <Twitter size={18} />
+          </a>
+          <a
+            href={`https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-3 border border-[#1A1A1A] hover:bg-black hover:text-white transition-colors flex items-center justify-center opacity-70 hover:opacity-100"
+            aria-label="Share on Facebook"
+          >
+            <Facebook size={18} />
+          </a>
+          <a
+            href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-3 border border-[#1A1A1A] hover:bg-black hover:text-white transition-colors flex items-center justify-center opacity-70 hover:opacity-100"
+            aria-label="Share on LinkedIn"
+          >
+            <Linkedin size={18} />
+          </a>
+          <button
+            onClick={handleCopyLink}
+            className="p-3 border border-[#1A1A1A] hover:bg-black hover:text-white transition-colors flex items-center justify-center opacity-70 hover:opacity-100"
+            aria-label="Copy Link"
+          >
+            <Link2 size={18} />
+          </button>
+        </div>
       </div>
 
       {/* Comments Section */}
@@ -179,7 +233,7 @@ export default function PostDetail() {
             <div key={comment.id} className="border-l-2 border-black pl-4 py-2 mb-6">
               <p className="text-sm italic mb-2 font-serif text-[#1A1A1A]">"{comment.content}"</p>
               <span className="text-[10px] font-sans font-bold uppercase opacity-60">
-                — {comment.authorName} • {format(new Date(comment.createdAt), 'MMM d, yyyy')}
+                — {comment.authorName} • {format(comment.createdAt && (comment.createdAt as any).toDate ? (comment.createdAt as any).toDate() : new Date(comment.createdAt || Date.now()), 'MMM d, yyyy')}
               </span>
             </div>
           ))}

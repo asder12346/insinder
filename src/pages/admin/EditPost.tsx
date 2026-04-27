@@ -1,6 +1,7 @@
-import { useState, useEffect, FormEvent } from 'react';
-import { doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { useState, useEffect, FormEvent, useRef, ChangeEvent } from 'react';
+import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../../firebase';
 import { handleFirestoreError, OperationType } from '../../utils/firebaseErrorHandler';
 import { useNavigate, Navigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -19,6 +20,8 @@ export default function AdminEditPost() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function fetchPost() {
@@ -47,6 +50,24 @@ export default function AdminEditPost() {
   if (authLoading || loading) return <div className="min-h-screen bg-[#F9F8F6]" />;
   if (!user || !isAdmin) return <Navigate to="/" />;
 
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const storageRef = ref(storage, `blog_images/${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+      setImageUrl(url);
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert('Failed to upload image. Please check your Firebase Storage security rules or connection.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleUpdate = async (e: FormEvent) => {
     e.preventDefault();
     if (!id || !title || !content || !imageUrl) return;
@@ -59,7 +80,7 @@ export default function AdminEditPost() {
         content: content.trim(),
         imageUrl: imageUrl.trim(),
         status,
-        updatedAt: new Date().toISOString()
+        updatedAt: serverTimestamp()
       };
       
       await updateDoc(docRef, payload);
@@ -133,14 +154,33 @@ export default function AdminEditPost() {
         <section className="lg:w-[40%] bg-white flex flex-col overflow-y-auto w-full">
           <div className="p-8 border-b border-[#1A1A1A]">
             <div className="flex justify-between items-center mb-6 uppercase text-[10px] font-sans tracking-widest font-bold">
-              <span>Feature Image URL</span>
+              <span>Feature Image</span>
+              {uploading && <span className="opacity-50">Uploading...</span>}
             </div>
+            
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              ref={fileInputRef}
+              className="hidden"
+            />
+            
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full font-sans text-xs p-4 border border-[#1A1A1A] focus:outline-none mb-6 bg-[#F9F8F6] text-left opacity-70 hover:opacity-100 transition-opacity"
+              disabled={uploading}
+            >
+              {imageUrl ? 'Change Image...' : 'Select from device...'}
+            </button>
+            
             <input
               type="url"
               value={imageUrl}
               onChange={(e) => setImageUrl(e.target.value)}
               className="w-full font-sans text-xs p-4 border border-[#1A1A1A] focus:outline-none mb-6 placeholder-gray-300 bg-[#F9F8F6]"
-              placeholder="https://images.unsplash.com/..."
+              placeholder="Or paste URL: https://images.unsplash.com/..."
               required
             />
             {imageUrl && (
