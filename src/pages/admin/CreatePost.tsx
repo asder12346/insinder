@@ -108,37 +108,43 @@ export default function AdminCreatePost() {
               {uploading && <span className="opacity-50">Uploading...</span>}
             </div>
             
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              ref={fileInputRef}
-              className="hidden"
-            />
-            
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full font-sans text-xs p-4 border border-[#1A1A1A] focus:outline-none mb-6 bg-[#F9F8F6] text-left opacity-70 hover:opacity-100 transition-opacity"
-              disabled={uploading}
+            <div
+              onClick={() => !uploading && fileInputRef.current?.click()}
+              className={`w-full aspect-video border border-dashed ${imageUrl ? 'border-transparent' : 'border-[#1A1A1A]'} flex flex-col items-center justify-center cursor-pointer relative overflow-hidden bg-[#F9F8F6] hover:bg-gray-50 transition-colors group mb-6`}
             >
-              {imageUrl ? 'Change Image...' : 'Select from device...'}
-            </button>
-            
-            <input
-              type="url"
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              className="w-full font-sans text-xs p-4 border border-[#1A1A1A] focus:outline-none mb-6 placeholder-gray-300 bg-[#F9F8F6]"
-              placeholder="Or paste URL: https://..."
-            />
-            
-            {imageUrl && (
-              <div className="aspect-video bg-gray-100 border border-dashed border-[#1A1A1A] flex items-center justify-center overflow-hidden relative">
-                <div className="absolute inset-0 bg-[#00000005] mix-blend-multiply"></div>
-                <img src={imageUrl} alt="Preview" className="absolute inset-0 h-full w-full object-cover grayscale opacity-90" />
-              </div>
-            )}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                ref={fileInputRef}
+                className="hidden"
+              />
+              
+              {imageUrl ? (
+                <>
+                  <div className="absolute inset-0 bg-[#00000005] mix-blend-multiply z-10"></div>
+                  <img src={imageUrl} alt="Preview" className="absolute inset-0 h-full w-full object-cover grayscale opacity-90 group-hover:opacity-40 transition-opacity" />
+                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
+                    <span className="text-white font-sans text-xs uppercase tracking-widest font-bold bg-black/60 px-4 py-2">
+                      {uploading ? 'Uploading...' : 'Replace Image'}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center gap-3">
+                  <span className={`p-4 bg-white border border-[#1A1A1A] rounded-full transition-transform ${uploading ? 'animate-bounce' : 'group-hover:-translate-y-1'}`}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#1A1A1A]">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="17 8 12 3 7 8"/>
+                      <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                  </span>
+                  <span className="font-sans text-xs uppercase tracking-widest opacity-60">
+                    {uploading ? 'Uploading...' : 'Click to upload from device'}
+                  </span>
+                </div>
+              )}
+            </div>
             
             <div className="mt-10">
               <div className="flex justify-between items-center mb-6 uppercase text-[10px] font-sans tracking-widest font-bold">
