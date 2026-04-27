@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
-import { db } from '../../firebase';
-import { handleFirestoreError, OperationType } from '../../utils/firebaseErrorHandler';
+import { supabase } from '../../supabase';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { format } from 'date-fns';
@@ -10,39 +8,37 @@ interface Post {
   id: string;
   title: string;
   status: string;
-  createdAt: string;
-  updatedAt: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export default function AdminDashboard() {
-  const { user, isAdmin, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchAdminPosts() {
-      if (!user || !isAdmin) return;
+      if (!user) return;
       try {
         // Admin can list their posts
-        const q = query(
-          collection(db, 'posts'),
-          where('authorId', '==', user.uid),
-          orderBy('createdAt', 'desc')
-        );
-        const querySnapshot = await getDocs(q);
-        const postsData: Post[] = [];
-        querySnapshot.forEach((doc) => {
-          postsData.push({ id: doc.id, ...doc.data() } as Post);
-        });
-        setPosts(postsData);
+        const { data, error } = await supabase
+          .from('posts')
+          .select('*')
+          .eq('author_id', user.id)
+          .order('created_at', { ascending: false });
+          
+        if (error) throw error;
+        
+        setPosts(data || []);
       } catch (error) {
-         handleFirestoreError(error, OperationType.LIST, 'posts');
+         console.error('Error fetching admin posts:', error);
       } finally {
         setLoading(false);
       }
     }
     fetchAdminPosts();
-  }, [user, isAdmin]);
+  }, [user]);
 
   if (authLoading || loading) {
     return (
@@ -52,14 +48,14 @@ export default function AdminDashboard() {
     );
   }
 
-  if (!user || !isAdmin) {
+  if (!user) {
     return <Navigate to="/" />;
   }
 
   return (
     <div className="min-h-screen bg-[#F9F8F6] text-[#1A1A1A] font-serif flex flex-col flex-grow w-full">
       <header className="border-b border-[#1A1A1A] px-10 py-8 flex items-center justify-between shrink-0">
-        <h1 className="text-4xl font-bold uppercase tracking-tight">Debian Admin</h1>
+        <h1 className="text-4xl font-bold uppercase tracking-tight">My Stories</h1>
         <Link
           to="/admin/create"
           className="font-sans text-[10px] uppercase font-bold border border-black px-6 py-3 hover:bg-black hover:text-white transition-colors"
@@ -70,7 +66,7 @@ export default function AdminDashboard() {
 
       <main className="max-w-6xl mx-auto px-6 py-8 w-full flex-grow flex flex-col">
         <div className="mb-8 p-6 border border-[#1A1A1A] bg-white font-sans text-xs uppercase tracking-widest text-[#1A1A1A]">
-          System Status: OK. Welcome to the administrative interface.
+          Manage your published stories and drafts.
         </div>
 
         <div className="border border-[#1A1A1A] bg-white flex-grow flex flex-col">
@@ -94,13 +90,30 @@ export default function AdminDashboard() {
                       {post.status}
                     </span>
                   </div>
-                  <div className="col-span-2 flex justify-end">
+                  <div className="col-span-2 flex justify-end gap-2">
                     <Link
                       to={`/admin/edit/${post.id}`}
                       className="font-sans text-[10px] uppercase tracking-widest font-bold border border-black px-4 py-2 hover:bg-black hover:text-white transition-colors text-center"
                     >
                       Modify
                     </Link>
+                    <button
+                      onClick={async () => {
+                        if (window.confirm('Are you sure you want to delete this post?')) {
+                          try {
+                            const { error } = await supabase.from('posts').delete().eq('id', post.id);
+                            if (error) throw error;
+                            setPosts(posts.filter(p => p.id !== post.id));
+                          } catch (err) {
+                            console.error('Error deleting post:', err);
+                            alert('Failed to delete post.');
+                          }
+                        }
+                      }}
+                      className="font-sans text-[10px] uppercase tracking-widest font-bold border border-red-500 text-red-500 px-4 py-2 hover:bg-red-500 hover:text-white transition-colors text-center cursor-pointer"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
               ))

@@ -1,15 +1,12 @@
 import { useState, useEffect, FormEvent, useRef, ChangeEvent } from 'react';
-import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../../firebase';
-import { handleFirestoreError, OperationType } from '../../utils/firebaseErrorHandler';
+import { supabase } from '../../supabase';
 import { useNavigate, Navigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Trash2 } from 'lucide-react';
 
 export default function AdminEditPost() {
   const { id } = useParams<{ id: string }>();
-  const { user, isAdmin, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   
   const [title, setTitle] = useState('');
@@ -25,30 +22,43 @@ export default function AdminEditPost() {
 
   useEffect(() => {
     async function fetchPost() {
-      if (!id || !user || !isAdmin) return;
+      if (!id || !user) return;
       try {
-        const docRef = doc(db, 'posts', id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
+        const { data, error } = await supabase
+          .from('posts')
+          .select('*')
+          .eq('id', id)
+          .single();
+          
+        if (error) {
+          throw error;
+        }
+        
+        if (data) {
+          // If the post does not belong to the user, redirect them
+          if (data.author_id !== user.id) {
+             navigate('/admin');
+             return;
+          }
           setTitle(data.title);
           setContent(data.content);
-          setImageUrl(data.imageUrl);
+          setImageUrl(data.image_url);
           setStatus(data.status);
         } else {
           navigate('/admin');
         }
       } catch (error) {
-        handleFirestoreError(error, OperationType.GET, `posts/${id}`);
+        console.error('Error fetching post:', error);
+        navigate('/admin');
       } finally {
         setLoading(false);
       }
     }
     fetchPost();
-  }, [id, user, isAdmin, navigate]);
+  }, [id, user, navigate]);
 
   if (authLoading || loading) return <div className="min-h-screen bg-[#F9F8F6]" />;
-  if (!user || !isAdmin) return <Navigate to="/" />;
+  if (!user) return <Navigate to="/" />;
 
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -56,13 +66,64 @@ export default function AdminEditPost() {
 
     setUploading(true);
     try {
-      const storageRef = ref(storage, `blog_images/${Date.now()}_${file.name}`);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
-      setImageUrl(url);
+      // Create a canvas to compress the image
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      await new Promise((resolve) => {
+        img.onload = resolve;
+      });
+
+      const canvas = document.createElement('canvas');
+      const MAX_WIDTH = 1200;
+      const MAX_HEIGHT = 1200;
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+      } else {
+        if (height > MAX_HEIGHT) {
+          width *= MAX_HEIGHT / height;
+          height = MAX_HEIGHT;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0, width, height);
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (b) => {
+            if (b) resolve(b);
+            else reject(new Error('Canvas to Blob failed'));
+          },
+          'image/jpeg',
+          0.85
+        );
+      });
+
+      const fileName = `${Date.now()}_${file.name}`;
+      const { data, error } = await supabase.storage
+        .from('blog_images')
+        .upload(fileName, blob);
+
+      if (error) {
+        throw error;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('blog_images')
+        .getPublicUrl(fileName);
+        
+      setImageUrl(publicUrl);
     } catch (error) {
       console.error('Error uploading image:', error);
-      alert('Failed to upload image. Please check your Firebase Storage security rules or connection.');
+      alert('Failed to upload image. Please verify you have enabled Storage bucket named "blog_images" in your Supabase Console.');
     } finally {
       setUploading(false);
     }
@@ -74,19 +135,22 @@ export default function AdminEditPost() {
     
     setSaving(true);
     try {
-      const docRef = doc(db, 'posts', id);
-      const payload = {
-        title: title.trim(),
-        content: content.trim(),
-        imageUrl: imageUrl.trim(),
-        status,
-        updatedAt: serverTimestamp()
-      };
-      
-      await updateDoc(docRef, payload);
+      const { error } = await supabase
+        .from('posts')
+        .update({
+          title: title.trim(),
+          content: content.trim(),
+          image_url: imageUrl.trim(),
+          status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+        
+      if (error) throw error;
       navigate('/admin');
     } catch (error) {
-       handleFirestoreError(error, OperationType.UPDATE, `posts/${id}`);
+       console.error('Error updating post:', error);
+       alert('Failed to update post.');
     } finally {
       setSaving(false);
     }
@@ -98,10 +162,16 @@ export default function AdminEditPost() {
     
     setDeleting(true);
     try {
-      await deleteDoc(doc(db, 'posts', id));
+      const { error } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', id);
+        
+      if (error) throw error;
       navigate('/admin');
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `posts/${id}`);
+      console.error('Error deleting post:', error);
+      alert('Failed to delete post.');
       setDeleting(false);
     }
   };
@@ -110,7 +180,7 @@ export default function AdminEditPost() {
     <div className="min-h-screen bg-[#F9F8F6] text-[#1A1A1A] flex flex-col font-serif w-full">
       <nav className="h-20 border-b border-[#1A1A1A] flex items-center justify-between px-10 shrink-0 bg-[#F9F8F6]">
         <div className="flex items-baseline space-x-4">
-          <span className="text-2xl font-bold tracking-tight uppercase border-r border-[#1A1A1A] pr-4">Debian Admin</span>
+          <span className="text-2xl font-bold tracking-tight uppercase border-r border-[#1A1A1A] pr-4">iLiyaIsaac</span>
           <span className="hidden sm:inline text-xs font-sans uppercase tracking-widest text-[#1A1A1A] opacity-50 pl-4">Content Management / Edit Post</span>
         </div>
         <div className="flex items-center gap-6">

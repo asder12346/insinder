@@ -1,13 +1,10 @@
 import { useState, FormEvent, useRef, ChangeEvent } from 'react';
-import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../../firebase';
-import { handleFirestoreError, OperationType } from '../../utils/firebaseErrorHandler';
+import { supabase } from '../../supabase';
 import { useNavigate, Navigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function AdminCreatePost() {
-  const { user, isAdmin, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -18,7 +15,7 @@ export default function AdminCreatePost() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (authLoading) return <div className="min-h-screen bg-[#F9F8F6]" />;
-  if (!user || !isAdmin) return <Navigate to="/" />;
+  if (!user) return <Navigate to="/" />;
 
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -26,13 +23,64 @@ export default function AdminCreatePost() {
 
     setUploading(true);
     try {
-      const storageRef = ref(storage, `blog_images/${Date.now()}_${file.name}`);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
-      setImageUrl(url);
+      // Create a canvas to compress the image
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      await new Promise((resolve) => {
+        img.onload = resolve;
+      });
+
+      const canvas = document.createElement('canvas');
+      const MAX_WIDTH = 1200;
+      const MAX_HEIGHT = 1200;
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+      } else {
+        if (height > MAX_HEIGHT) {
+          width *= MAX_HEIGHT / height;
+          height = MAX_HEIGHT;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0, width, height);
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (b) => {
+            if (b) resolve(b);
+            else reject(new Error('Canvas to Blob failed'));
+          },
+          'image/jpeg',
+          0.85
+        );
+      });
+
+      const fileName = `${Date.now()}_${file.name}`;
+      const { data, error } = await supabase.storage
+        .from('blog_images')
+        .upload(fileName, blob);
+
+      if (error) {
+        throw error;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('blog_images')
+        .getPublicUrl(fileName);
+        
+      setImageUrl(publicUrl);
     } catch (error) {
       console.error('Error uploading image:', error);
-      alert('Failed to upload image. Please check your Firebase Storage security rules or connection.');
+      alert('Failed to upload image. Please verify you have enabled Storage bucket named "blog_images" in your Supabase Console.');
     } finally {
       setUploading(false);
     }
@@ -47,21 +95,20 @@ export default function AdminCreatePost() {
     
     setSaving(true);
     try {
-      const newPostRef = doc(collection(db, 'posts'));
-      const payload = {
+      const { error } = await supabase.from('posts').insert([{
         title: title.trim(),
         content: content.trim(),
-        imageUrl: imageUrl.trim(),
-        authorId: user.uid,
+        image_url: imageUrl.trim(),
+        author_id: user.id,
         status,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
+      }]);
+
+      if (error) throw error;
       
-      await setDoc(newPostRef, payload);
       navigate('/admin');
     } catch (error) {
-       handleFirestoreError(error, OperationType.CREATE, 'posts');
+       console.error('Error creating post', error);
+       alert('Failed to create post. Be sure your Supabase API keys are correct.');
     } finally {
       setSaving(false);
     }
@@ -71,7 +118,7 @@ export default function AdminCreatePost() {
     <div className="min-h-screen bg-[#F9F8F6] text-[#1A1A1A] flex flex-col font-serif w-full">
       <nav className="h-20 border-b border-[#1A1A1A] flex items-center justify-between px-10 shrink-0 bg-[#F9F8F6]">
         <div className="flex items-baseline space-x-4">
-          <span className="text-2xl font-bold tracking-tight uppercase border-r border-[#1A1A1A] pr-4">Debian Admin</span>
+          <span className="text-2xl font-bold tracking-tight uppercase border-r border-[#1A1A1A] pr-4">iLiyaIsaac</span>
           <span className="hidden sm:inline text-xs font-sans uppercase tracking-widest text-[#1A1A1A] opacity-50 pl-4">Content Management / New Post</span>
         </div>
         <Link to="/admin" className="font-sans text-xs uppercase tracking-widest opacity-50 hover:opacity-100 transition-opacity">Back to Dashboard</Link>

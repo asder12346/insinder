@@ -15,13 +15,21 @@ export default function Navbar() {
         </span>
       </div>
       <div className="flex items-center space-x-6 font-sans text-xs uppercase tracking-widest text-[#1A1A1A]">
-        {isAdmin && (
-          <Link
-            to="/admin"
-            className="opacity-50 hover:opacity-100 transition-opacity"
-          >
-            Admin
-          </Link>
+        {user && (
+          <>
+            <Link
+              to="/admin/create"
+              className="opacity-50 hover:opacity-100 transition-opacity"
+            >
+              Write
+            </Link>
+            <Link
+              to="/admin"
+              className="opacity-50 hover:opacity-100 transition-opacity"
+            >
+              My Stories
+            </Link>
+          </>
         )}
         
         {user ? (
