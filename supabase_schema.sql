@@ -22,15 +22,22 @@ create table if not exists comments (
   id uuid default gen_random_uuid() primary key,
   post_id uuid references posts(id) on delete cascade not null,
   content text not null,
-  author_id uuid references auth.users(id) not null,
+  author_id uuid references auth.users(id), -- Nullable for anonymous authors
   author_name text not null,
   created_at timestamp with time zone default now()
 );
+
+-- Alter author_id to drop NOT NULL constraint if executing on an existing database
+alter table comments alter column author_id drop not null;
 
 -- Enable RLS
 alter table posts enable row level security;
 alter table admins enable row level security;
 alter table comments enable row level security;
+
+-- Create indexes for performance
+create index if not exists idx_posts_status_created_at on posts(status, created_at desc);
+create index if not exists idx_comments_post_id_created_at on comments(post_id, created_at asc);
 
 -- Drop previous policies to reset
 drop policy if exists "Anyone can view published posts" on posts;
@@ -40,7 +47,10 @@ drop policy if exists "Admins can update posts" on posts;
 drop policy if exists "Admins can delete posts" on posts;
 drop policy if exists "Anyone can view admins" on admins;
 drop policy if exists "Anyone can view comments" on comments;
+drop policy if exists "Anyone can post comments" on comments;
 drop policy if exists "Auth users can post comments" on comments;
+drop policy if exists "Auth users can update comments" on comments;
+drop policy if exists "Auth users can delete comments" on comments;
 
 -- Admins policy
 create policy "Anyone can view admins" on admins for select using (true);
@@ -54,9 +64,9 @@ create policy "Admins can delete posts" on posts for delete using (exists (selec
 
 -- Comments Policies
 create policy "Anyone can view comments" on comments for select using (true);
-create policy "Auth users can post comments" on comments for insert with check (auth.uid() = author_id);
-create policy "Auth users can update comments" on comments for update using (exists (select 1 from admins where user_id = auth.uid()) OR auth.uid() = author_id);
-create policy "Auth users can delete comments" on comments for delete using (exists (select 1 from admins where user_id = auth.uid()) OR auth.uid() = author_id);
+create policy "Anyone can post comments" on comments for insert with check (true);
+create policy "Auth users can update comments" on comments for update using (exists (select 1 from admins where user_id = auth.uid()) OR (auth.uid() is not null AND auth.uid() = author_id));
+create policy "Auth users can delete comments" on comments for delete using (exists (select 1 from admins where user_id = auth.uid()) OR (auth.uid() is not null AND auth.uid() = author_id));
 
 -- Insert public images bucket if not exists
 insert into storage.buckets (id, name, public) 

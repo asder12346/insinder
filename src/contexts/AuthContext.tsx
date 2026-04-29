@@ -33,6 +33,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       checkAdmin(currentUser);
+    }).catch((error) => {
+      console.error("Error checking session:", error);
+      setLoading(false);
     });
 
     // Listen for auth changes
@@ -143,7 +146,7 @@ const LoginModal = ({ onClose }: { onClose: () => void }) => {
             {isSignUp ? 'Create Account' : 'Sign In'}
           </h2>
           <p className="text-gray-500 mb-6 font-sans text-sm">
-            {isSignUp ? 'Sign up with email and password to start posting.' : 'Enter your email and password to sign in.'}
+            {isSignUp ? 'Sign up with email and password to start posting. (Note: Platform limited to 2 authors)' : 'Enter your email and password to sign in.'}
           </p>
           <form onSubmit={handleAuth} className="flex flex-col gap-4">
              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="name@example.com" required className="p-3 border border-gray-300 w-full focus:outline-none focus:border-[#1A1A1A] font-sans transition-colors" />

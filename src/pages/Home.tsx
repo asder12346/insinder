@@ -18,6 +18,7 @@ export default function Home() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     async function fetchPosts() {
@@ -30,8 +31,13 @@ export default function Home() {
           
         if (error) throw error;
         setPosts(data || []);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching posts:', error);
+        if (error.message === 'Failed to fetch' || error.message?.includes('fetch')) {
+           setErrorMsg('Failed to fetch data from Supabase. Please ensure your VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables are set correctly in Vercel.');
+        } else {
+           setErrorMsg(error.message || 'An error occurred while fetching posts.');
+        }
       } finally {
         setLoading(false);
       }
@@ -58,6 +64,13 @@ export default function Home() {
         <h1 className="text-5xl font-bold uppercase font-serif text-[#1A1A1A]">Latest Insights</h1>
         <p className="mt-4 font-sans text-xs uppercase tracking-widest text-[#1A1A1A] opacity-50">Discover thought-provoking articles and ideas.</p>
       </div>
+
+      {errorMsg && (
+        <div className="mb-8 p-6 bg-red-50 border border-red-200">
+          <h2 className="text-red-800 font-bold font-sans uppercase tracking-widest text-xs mb-2">Connection Error</h2>
+          <p className="text-red-600 font-sans text-sm">{errorMsg}</p>
+        </div>
+      )}
 
       <div className="relative mb-12 border border-[#1A1A1A] bg-white hover:shadow-md transition-shadow">
         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -86,6 +99,7 @@ export default function Home() {
                 <img
                   src={post.image_url || 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&q=80'}
                   alt={post.title}
+                  loading="lazy"
                   className="absolute inset-0 h-full w-full object-cover grayscale opacity-90 group-hover:grayscale-0 transition-all duration-500 ease-in-out"
                 />
               </div>

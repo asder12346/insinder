@@ -30,9 +30,11 @@ export default function PostDetail() {
   const [post, setPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState('');
   const { user, isAdmin, signIn } = useAuth();
   
   const [newComment, setNewComment] = useState('');
+  const [anonName, setAnonName] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
@@ -65,8 +67,15 @@ export default function PostDetail() {
             setComments(commentsData);
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching post data:', error);
+        if (error.message === 'Failed to fetch' || error.message?.includes('fetch')) {
+           setErrorMsg('Failed to fetch data from Supabase. Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are correctly set.');
+        } else if (error.code === 'PGRST116') {
+           setErrorMsg('Post not found.');
+        } else {
+           setErrorMsg('An error occurred loading the post.');
+        }
       } finally {
         setLoading(false);
       }
@@ -76,15 +85,15 @@ export default function PostDetail() {
 
   const handlePostComment = async (e: FormEvent) => {
     e.preventDefault();
-    if (!id || !user || !newComment.trim() || submittingComment) return;
+    if (!id || !newComment.trim() || submittingComment) return;
     
     setSubmittingComment(true);
     try {
       const payload = {
         post_id: id,
         content: newComment.trim(),
-        author_id: user.id,
-        author_name: user.email?.split('@')[0] || 'Anonymous',
+        author_id: user?.id || null,
+        author_name: user?.email?.split('@')[0] || anonName.trim() || 'Anonymous',
       };
       
       const { data, error } = await supabase
@@ -97,6 +106,7 @@ export default function PostDetail() {
       
       setComments([...comments, data]);
       setNewComment('');
+      setAnonName('');
     } catch (error) {
       console.error('Error creating comment:', error);
     } finally {
@@ -160,6 +170,16 @@ export default function PostDetail() {
     alert('Link copied to clipboard!');
   };
 
+  if (errorMsg) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-12 text-center font-serif">
+        <h2 className="text-5xl font-bold uppercase text-[#1A1A1A]">Error</h2>
+        <p className="mt-4 text-red-600 font-sans text-sm">{errorMsg}</p>
+        <Link to="/" className="text-black hover:text-gray-600 mt-8 inline-block font-sans uppercase tracking-widest text-xs border-b border-black">Return home</Link>
+      </div>
+    );
+  }
+
   if (!post) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-12 text-center font-serif">
@@ -180,6 +200,7 @@ export default function PostDetail() {
         <img
           src={post.image_url || 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&q=80'}
           alt={post.title}
+          loading="eager"
           className="absolute inset-0 h-full w-full object-cover grayscale opacity-90 hover:grayscale-0 transition-opacity"
         />
       </div>
@@ -245,39 +266,36 @@ export default function PostDetail() {
       <section className="max-w-3xl mx-auto border-t border-[#1A1A1A] pt-10 mt-10">
         <h3 className="font-sans text-[10px] uppercase tracking-widest font-bold text-[#1A1A1A] mb-8 border-b border-[#1A1A1A] pb-4">Recent Comments ({comments.length})</h3>
         
-        {user ? (
-          <form onSubmit={handlePostComment} className="mb-10 p-6 border border-[#1A1A1A] bg-transparent">
-            <label htmlFor="comment" className="sr-only">Add your comment</label>
-            <textarea
-              id="comment"
-              rows={3}
-              className="block w-full border border-gray-300 focus:border-[#1A1A1A] focus:ring-[#1A1A1A] font-sans sm:text-sm p-4 resize-none bg-transparent"
-              placeholder="Share your thoughts..."
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              required
+        <form onSubmit={handlePostComment} className="mb-10 p-6 border border-[#1A1A1A] bg-transparent">
+          <label htmlFor="comment" className="sr-only">Add your comment</label>
+          {!user && (
+            <input
+              type="text"
+              placeholder="Your Name (optional)"
+              className="block w-full border-b border-gray-300 focus:border-[#1A1A1A] font-sans sm:text-sm p-3 mb-4 bg-transparent outline-none placeholder:uppercase placeholder:tracking-widest placeholder:text-xs"
+              value={anonName}
+              onChange={(e) => setAnonName(e.target.value)}
             />
-            <div className="mt-4 flex justify-end">
-              <button
-                type="submit"
-                disabled={submittingComment || !newComment.trim()}
-                className="w-full sm:w-auto bg-black text-white font-sans uppercase text-xs tracking-widest px-8 py-4 font-bold hover:bg-gray-800 transition-colors disabled:opacity-50"
-              >
-                {submittingComment ? 'Posting...' : 'Post Comment'}
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="mb-10 p-8 text-center border border-[#1A1A1A]">
-            <p className="font-sans text-xs uppercase tracking-widest text-[#1A1A1A] mb-4 font-bold">Join the conversation</p>
+          )}
+          <textarea
+            id="comment"
+            rows={3}
+            className="block w-full border border-gray-300 focus:border-[#1A1A1A] focus:ring-[#1A1A1A] font-sans sm:text-sm p-4 resize-none bg-transparent"
+            placeholder="Share your thoughts..."
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            required
+          />
+          <div className="mt-4 flex justify-end">
             <button
-              onClick={signIn}
-              className="inline-flex items-center px-6 py-3 border border-black font-sans text-xs uppercase tracking-widest font-bold text-black bg-transparent hover:bg-black hover:text-white transition-colors"
+              type="submit"
+              disabled={submittingComment || !newComment.trim()}
+              className="w-full sm:w-auto bg-black text-white font-sans uppercase text-xs tracking-widest px-8 py-4 font-bold hover:bg-gray-800 transition-colors disabled:opacity-50"
             >
-              Sign in to comment
+              {submittingComment ? 'Posting...' : 'Post Comment'}
             </button>
           </div>
-        )}
+        </form>
 
         <div className="space-y-6">
           {comments.map((comment) => (

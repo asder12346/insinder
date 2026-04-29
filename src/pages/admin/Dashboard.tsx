@@ -16,6 +16,7 @@ export default function AdminDashboard() {
   const { user, loading: authLoading } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     async function fetchAdminPosts() {
@@ -31,8 +32,13 @@ export default function AdminDashboard() {
         if (error) throw error;
         
         setPosts(data || []);
-      } catch (error) {
+      } catch (error: any) {
          console.error('Error fetching admin posts:', error);
+         if (error.message === 'Failed to fetch' || error.message?.includes('fetch')) {
+           setErrorMsg('Failed to fetch data from Supabase. Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are correctly set.');
+         } else {
+           setErrorMsg('An error occurred loading your posts.');
+         }
       } finally {
         setLoading(false);
       }
@@ -68,6 +74,13 @@ export default function AdminDashboard() {
         <div className="mb-8 p-6 border border-[#1A1A1A] bg-white font-sans text-xs uppercase tracking-widest text-[#1A1A1A]">
           Manage your published stories and drafts.
         </div>
+
+        {errorMsg && (
+          <div className="mb-8 p-6 bg-red-50 border border-red-200">
+            <h2 className="text-red-800 font-bold font-sans uppercase tracking-widest text-xs mb-2">Connection Error</h2>
+            <p className="text-red-600 font-sans text-sm">{errorMsg}</p>
+          </div>
+        )}
 
         <div className="border border-[#1A1A1A] bg-white flex-grow flex flex-col">
           <div className="grid grid-cols-12 gap-4 p-4 border-b border-[#1A1A1A] font-sans font-bold text-[10px] uppercase tracking-widest bg-[#F9F8F6]">
