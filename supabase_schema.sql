@@ -73,5 +73,8 @@ insert into storage.buckets (id, name, public)
 values ('blog_images', 'blog_images', true)
 on conflict (id) do nothing;
 
+drop policy if exists "Images are publicly accessible" on storage.objects;
+drop policy if exists "Auth users can upload images" on storage.objects;
+
 create policy "Images are publicly accessible" on storage.objects for select using ( bucket_id = 'blog_images' );
 create policy "Auth users can upload images" on storage.objects for insert with check ( bucket_id = 'blog_images' AND auth.role() = 'authenticated' );
